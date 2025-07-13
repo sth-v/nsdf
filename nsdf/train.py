@@ -18,7 +18,7 @@ from model import SDFMLP
 # Hyper‑parameters (can all be overridden on CLI)                             #
 # --------------------------------------------------------------------------- #
 DEFAULT_BATCH_GPU  = 32768
-DEFAULT_BATCH_CPU  = 8192
+DEFAULT_BATCH_CPU  = 8192*2
 LEARNING_RATE      = 1e-4
 EPOCHS             = 500
 EIKONAL_WEIGHT     = 0.1
@@ -55,6 +55,7 @@ def parse_args():
     p.add_argument("--batch",  type=int,       help="Batch size (override default)")
     p.add_argument("--no-compile", action="store_true",
                    help="Skip torch.compile even on GPU (for Triton issues)")
+    p.add_argument("--epochs", type=int, default=EPOCHS,)
     return p.parse_args()
 
 # --------------------------------------------------------------------------- #
@@ -64,11 +65,13 @@ def main():
     args   = parse_args()
     device = torch.device(args.device)
     is_cuda = device.type == "cuda"
-
+    is_mps = device.type == "mps"
+    is_gpu = is_cuda or is_mps
     batch_size = args.batch or (DEFAULT_BATCH_GPU if is_cuda else DEFAULT_BATCH_CPU)
     amp_ctx    = lambda *args,**kwargs:torch.amp.autocast(device.type, *args,**kwargs)
     scaler     = torch.amp.GradScaler(device.type)
-
+    #amp_ctx = torch.cuda.amp.autocast if is_cuda else contextlib.nullcontext
+    #scaler = torch.cuda.amp.GradScaler() if is_cuda else DummyScaler()
     # ----------------------- Dataset & DataLoader --------------------------- #
     ds_full = SDFDataset(args.data)
     n_val   = int(len(ds_full) * VALID_FRACTION)
@@ -91,7 +94,7 @@ def main():
     best_val = float("inf")
 
     # ----------------------- Training loop --------------------------------- #
-    for epoch in range(1, EPOCHS + 1):
+    for epoch in range(1, args.epochs + 1):
         model.train()
         running = 0.0
         t0 = time.time()
@@ -134,7 +137,7 @@ def main():
             flag = " "
 
         elapsed = time.time() - t0
-        print(f"[{epoch:4d}/{EPOCHS}] "
+        print(f"[{epoch:4d}/{args.epochs}] "
               f"train {train_loss:.6e} | val {val_loss:.6e} {flag} | {elapsed:.1f}s "
               f"({device.type})")
 
