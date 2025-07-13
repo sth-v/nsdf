@@ -66,7 +66,7 @@ def main():
 
     # 4. save ------------------------------------------------------------------
     pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(args.out, points=pts, sdf=sdf)
+    np.savez_compressed(args.out, points=pts.astype(np.float32), sdf=sdf)
     print(f"[make_dataset] wrote {pts.shape[0]} samples → {args.out}")
 
 if __name__ == "__main__":
